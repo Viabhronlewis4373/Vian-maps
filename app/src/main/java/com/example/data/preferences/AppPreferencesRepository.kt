@@ -1,0 +1,149 @@
+package com.example.data.preferences
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStoreFile
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.util.concurrent.ConcurrentHashMap
+
+data class MapCameraState(
+    val latitude: Double = 37.7749,
+    val longitude: Double = -122.4194,
+    val zoom: Double = 11.0,
+    val bearing: Double = 0.0,
+    val isNorthLocked: Boolean = false
+)
+
+data class AppUserPreferences(
+    val cameraState: MapCameraState = MapCameraState(),
+    val isTopPanelCollapsed: Boolean = true,
+    val isInternetEnabled: Boolean = true,
+    val selectedStyleId: String = "hybrid_satellite_osm",
+    val activeCompositionId: String = "comp_satellite_hybrid",
+    val savedCompositionsJson: String? = null
+)
+
+class AppPreferencesRepository(
+    context: Context,
+    private val dataStore: DataStore<Preferences> = getOrCreateDataStore(context.applicationContext ?: context)
+) {
+
+    private companion object {
+        private const val DATA_STORE_NAME = "map_app_preferences"
+        private val storesByPath = ConcurrentHashMap<String, DataStore<Preferences>>()
+
+        fun getOrCreateDataStore(appContext: Context): DataStore<Preferences> {
+            val file = appContext.preferencesDataStoreFile(DATA_STORE_NAME)
+            val key = try {
+                file.canonicalPath
+            } catch (_: Throwable) {
+                file.absolutePath
+            }
+            return storesByPath.computeIfAbsent(key) {
+                PreferenceDataStoreFactory.create(
+                    produceFile = { file }
+                )
+            }
+        }
+    }
+
+    private object Keys {
+        val LATITUDE = doublePreferencesKey("camera_lat")
+        val LONGITUDE = doublePreferencesKey("camera_lng")
+        val ZOOM = doublePreferencesKey("camera_zoom")
+        val BEARING = doublePreferencesKey("camera_bearing")
+        val NORTH_LOCKED = booleanPreferencesKey("camera_north_locked")
+        val TOP_PANEL_COLLAPSED = booleanPreferencesKey("top_panel_collapsed")
+        val INTERNET_ENABLED = booleanPreferencesKey("pref_internet_enabled")
+        val SELECTED_STYLE_ID = stringPreferencesKey("pref_selected_style_id")
+        val ACTIVE_COMPOSITION_ID = stringPreferencesKey("pref_active_composition_id")
+        val SAVED_COMPOSITIONS_JSON = stringPreferencesKey("pref_saved_compositions_json")
+    }
+
+    val userPreferencesFlow: Flow<AppUserPreferences> = dataStore.data.map { prefs ->
+        val lat = prefs[Keys.LATITUDE] ?: 37.7749
+        val lng = prefs[Keys.LONGITUDE] ?: -122.4194
+        val zoom = prefs[Keys.ZOOM] ?: 11.0
+        val bearing = prefs[Keys.BEARING] ?: 0.0
+        val northLocked = prefs[Keys.NORTH_LOCKED] ?: false
+        val collapsed = prefs[Keys.TOP_PANEL_COLLAPSED] ?: true
+        val internet = prefs[Keys.INTERNET_ENABLED] ?: true
+        // Default to Hybrid (Satellite + OSM)
+        val savedStyleId = prefs[Keys.SELECTED_STYLE_ID]
+        val styleId = if (savedStyleId == null || savedStyleId == "maplibre_demo") {
+            "hybrid_satellite_osm"
+        } else {
+            savedStyleId
+        }
+
+        val activeCompId = prefs[Keys.ACTIVE_COMPOSITION_ID] ?: "comp_satellite_hybrid"
+        val savedCompsJson = prefs[Keys.SAVED_COMPOSITIONS_JSON]
+
+        AppUserPreferences(
+            cameraState = MapCameraState(
+                latitude = lat,
+                longitude = lng,
+                zoom = zoom,
+                bearing = bearing,
+                isNorthLocked = northLocked
+            ),
+            isTopPanelCollapsed = collapsed,
+            isInternetEnabled = internet,
+            selectedStyleId = styleId,
+            activeCompositionId = activeCompId,
+            savedCompositionsJson = savedCompsJson
+        )
+    }
+
+    suspend fun saveCameraState(lat: Double, lng: Double, zoom: Double, bearing: Double) {
+        dataStore.edit { prefs ->
+            prefs[Keys.LATITUDE] = lat
+            prefs[Keys.LONGITUDE] = lng
+            prefs[Keys.ZOOM] = zoom
+            prefs[Keys.BEARING] = bearing
+        }
+    }
+
+    suspend fun saveNorthLocked(locked: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.NORTH_LOCKED] = locked
+        }
+    }
+
+    suspend fun saveTopPanelCollapsed(collapsed: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.TOP_PANEL_COLLAPSED] = collapsed
+        }
+    }
+
+    suspend fun saveInternetEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.INTERNET_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveSelectedStyleId(styleId: String) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SELECTED_STYLE_ID] = styleId
+        }
+    }
+
+    suspend fun saveActiveCompositionId(compositionId: String) {
+        dataStore.edit { prefs ->
+            prefs[Keys.ACTIVE_COMPOSITION_ID] = compositionId
+        }
+    }
+
+    suspend fun saveSavedCompositionsJson(json: String) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SAVED_COMPOSITIONS_JSON] = json
+        }
+    }
+}
