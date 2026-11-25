@@ -595,10 +595,9 @@ fun MainMapScreen(
                 isInternetEnabled = uiState.isInternetEnabled,
                 isLocationActive = uiState.isLocationActive,
                 onToggleInternet = {
-                    viewModel.toggleInternet()
+                    val isEnabled = viewModel.toggleInternet()
                     coroutineScope.launch {
-                        val status = if (!uiState.isInternetEnabled) "In-App Internet ON" else "In-App Internet OFF (Blocked)"
-                        snackbarHostState.showSnackbar(status)
+                        snackbarHostState.showSnackbar(formatInternetToggleMessage(isEnabled))
                     }
                 },
                 onToggleLocation = {
@@ -969,3 +968,6 @@ fun MainMapScreen(
         }
     }
 }
+
+internal fun formatInternetToggleMessage(isInternetEnabled: Boolean): String =
+    if (isInternetEnabled) "In-App Internet ON" else "In-App Internet OFF (Blocked)"

@@ -10,9 +10,9 @@ package com.example.data.db
  */
 object AppDatabaseContract {
     const val DATABASE_NAME = "map_app_master.db"
-    const val CURRENT_VERSION = 3
+    const val CURRENT_VERSION = 4
 
-    // Active shared tables (v3):
+    // Active shared tables (v4):
     // - retained_tiles
     // - osm_pois, osm_buildings, osm_regions, osm_roads
     // - routing_graph_tiles
@@ -20,4 +20,6 @@ object AppDatabaseContract {
     // - saved_routes (Ordered user-created route geometry)
     // - route_waypoints (Ordered waypoints linked to saved_routes / optional user_places)
     // - saved_areas (Persistent offline Area Details snapshots, separate from tile caches)
+    // - notes (Standalone Notes workspace notes)
+    // - note_checklist_items (Normalized checklist items linked to notes via FK cascade)
 }

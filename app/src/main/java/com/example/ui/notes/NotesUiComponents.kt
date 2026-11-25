@@ -1,0 +1,415 @@
+package com.example.ui.notes
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ListAlt
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.R
+import com.example.data.notes.NoteColor
+
+/**
+ * Five-slot Notes workspace bottom bar:
+ * Notes | Habits | + | Expense | Calendar
+ */
+@Composable
+fun NotesFiveSlotBottomBar(
+    activeTab: NotesBottomTab,
+    onSelectTab: (NotesBottomTab) -> Unit,
+    onAddClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 6.dp
+    ) {
+        Column {
+            HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                NotesBottomNavTabItem(
+                    label = stringResource(id = R.string.notes_tab_notes),
+                    icon = Icons.Outlined.Description,
+                    selected = activeTab == NotesBottomTab.NOTES,
+                    testTag = "notes_bottom_nav_notes",
+                    onClick = { onSelectTab(NotesBottomTab.NOTES) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                NotesBottomNavTabItem(
+                    label = stringResource(id = R.string.notes_tab_habits),
+                    icon = Icons.Outlined.CheckCircle,
+                    selected = activeTab == NotesBottomTab.HABITS,
+                    testTag = "notes_bottom_nav_habits",
+                    onClick = { onSelectTab(NotesBottomTab.HABITS) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        onClick = onAddClick,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("notes_bottom_nav_add")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = stringResource(id = R.string.notes_add_button_cd),
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                }
+
+                NotesBottomNavTabItem(
+                    label = stringResource(id = R.string.notes_tab_expense),
+                    icon = Icons.Outlined.AccountBalanceWallet,
+                    selected = activeTab == NotesBottomTab.EXPENSE,
+                    testTag = "notes_bottom_nav_expense",
+                    onClick = { onSelectTab(NotesBottomTab.EXPENSE) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                NotesBottomNavTabItem(
+                    label = stringResource(id = R.string.notes_tab_calendar),
+                    icon = Icons.Outlined.CalendarMonth,
+                    selected = activeTab == NotesBottomTab.CALENDAR,
+                    testTag = "notes_bottom_nav_calendar",
+                    onClick = { onSelectTab(NotesBottomTab.CALENDAR) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotesBottomNavTabItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    testTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
+            .testTag(testTag),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Clean Material 3 Add chooser offering only Stage 1 note creation types: Text Note and Checklist.
+ */
+@Composable
+fun NoteAddChooserDialog(
+    onCreateTextNote: () -> Unit,
+    onCreateChecklist: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("notes_add_chooser_dialog"),
+        title = {
+            Text(text = stringResource(id = R.string.notes_add_chooser_title))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                AddChooserOptionCard(
+                    title = stringResource(id = R.string.notes_add_text_note),
+                    subtitle = stringResource(id = R.string.notes_add_text_note_desc),
+                    icon = Icons.Outlined.Description,
+                    testTag = "notes_add_text_note",
+                    onClick = onCreateTextNote
+                )
+                AddChooserOptionCard(
+                    title = stringResource(id = R.string.notes_add_checklist),
+                    subtitle = stringResource(id = R.string.notes_add_checklist_desc),
+                    icon = Icons.Outlined.Checklist,
+                    testTag = "notes_add_checklist",
+                    onClick = onCreateChecklist
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(text = stringResource(id = R.string.notes_action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun AddChooserOptionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact 3x3 Color Picker dialog presenting all nine unified palette colors in fixed palette order.
+ */
+@Composable
+fun NoteColorPickerDialog(
+    selectedColor: NoteColor?,
+    onSelectColor: (NoteColor) -> Unit,
+    onDismiss: () -> Unit,
+    testTag: String = "note_color_picker_dialog"
+) {
+    val rows = NoteColor.orderedColors.chunked(3)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag(testTag),
+        title = {
+            Text(text = stringResource(id = R.string.notes_color_picker_title))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                rows.forEach { rowColors ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowColors.forEach { color ->
+                            val isSelected = selectedColor == color
+                            Surface(
+                                onClick = { onSelectColor(color) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = color.listBackground,
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.5.dp else 1.5.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else color.saturatedStrip
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 56.dp)
+                                    .testTag("note_color_swatch_${color.key}")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(color.saturatedStrip)
+                                            .border(
+                                                1.dp,
+                                                Color(0x33000000),
+                                                CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Selected",
+                                                tint = color.editorHeaderForeground,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = color.displayName,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = Color(0xFF1A1A1A),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Text(text = stringResource(id = R.string.notes_action_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Honest Stage-2 placeholder content for Habits, Expense, and Calendar tabs.
+ * Contains no fake sample data, charts, or non-functional buttons.
+ */
+@Composable
+fun NotesStage2PlaceholderContent(
+    tab: NotesBottomTab,
+    modifier: Modifier = Modifier
+) {
+    val icon = when (tab) {
+        NotesBottomTab.HABITS -> Icons.Outlined.CheckCircle
+        NotesBottomTab.EXPENSE -> Icons.Outlined.AccountBalanceWallet
+        NotesBottomTab.CALENDAR -> Icons.Outlined.CalendarMonth
+        NotesBottomTab.NOTES -> Icons.AutoMirrored.Outlined.ListAlt
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp)
+            .testTag("notes_stage2_placeholder_${tab.name.lowercase()}"),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(id = R.string.notes_future_module_title, tab.label),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(id = R.string.notes_future_module_subtitle, tab.label),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}

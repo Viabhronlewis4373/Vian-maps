@@ -580,7 +580,7 @@ class MapViewModel(
         }
     }
 
-    fun toggleInternet() {
+    fun toggleInternet(): Boolean {
         hasLocalInternetOverride.set(true)
         val newInternet = !_uiState.value.isInternetEnabled
         AppNetworkPolicy.setInternetEnabled(newInternet)
@@ -588,6 +588,7 @@ class MapViewModel(
         launchPreferenceWrite {
             preferencesRepository.saveInternetEnabled(newInternet)
         }
+        return newInternet
     }
 
     fun toggleLocationMode(onPermissionNeeded: () -> Unit) {

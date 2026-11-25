@@ -280,11 +280,13 @@ class MapActivationSeamTest {
         assertTrue(fieldTypeNames.any { it.contains("MapActivationBoundary") })
 
         assertEquals("map_app_master.db", AppDatabaseContract.DATABASE_NAME)
-        assertEquals(3, AppDatabaseContract.CURRENT_VERSION)
+        assertEquals(4, AppDatabaseContract.CURRENT_VERSION)
         assertEquals(1, AppDatabase.MIGRATION_1_2.startVersion)
         assertEquals(2, AppDatabase.MIGRATION_1_2.endVersion)
         assertEquals(2, AppDatabase.MIGRATION_2_3.startVersion)
         assertEquals(3, AppDatabase.MIGRATION_2_3.endVersion)
+        assertEquals(3, AppDatabase.MIGRATION_3_4.startVersion)
+        assertEquals(4, AppDatabase.MIGRATION_3_4.endVersion)
     }
 
     @Test
@@ -398,7 +400,7 @@ class MapActivationSeamTest {
         assertNotNull(report)
         assertTrue(report.perSource.isNotEmpty())
         assertEquals("map_app_master.db", AppDatabaseContract.DATABASE_NAME)
-        assertEquals(3, AppDatabaseContract.CURRENT_VERSION)
+        assertEquals(4, AppDatabaseContract.CURRENT_VERSION)
     }
 
     @Test
@@ -477,7 +479,7 @@ class MapActivationSeamTest {
         assertEquals(0, sdkInitCalls.get())
         assertEquals(0, depsCreated.get())
         assertNull(coordinator.dependenciesOrNull())
-        composeTestRule.onNodeWithTag("notes_placeholder_screen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("notes_workspace_screen").assertIsDisplayed()
         composeTestRule.onNodeWithTag("notes_return_to_map_button").assertIsDisplayed()
 
         // Tapping Return to Map activates Map cleanly
@@ -488,7 +490,7 @@ class MapActivationSeamTest {
         assertTrue(coordinator.isRuntimeInitialized)
         assertEquals(1, sdkInitCalls.get())
         assertEquals(1, depsCreated.get())
-        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_placeholder_screen").fetchSemanticsNodes().size)
+        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_workspace_screen").fetchSemanticsNodes().size)
         composeTestRule.onNodeWithText("Map Session Active").assertIsDisplayed()
     }
 
@@ -532,7 +534,7 @@ class MapActivationSeamTest {
         assertEquals(1, sdkInitCalls.get())
         assertEquals(1, depsCreated.get())
         composeTestRule.onNodeWithTag("bottom_nav_bar").assertIsDisplayed()
-        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_placeholder_screen").fetchSemanticsNodes().size)
+        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_workspace_screen").fetchSemanticsNodes().size)
     }
 
     @Test
@@ -619,7 +621,7 @@ class MapActivationSeamTest {
         composeTestRule.waitForIdle()
 
         // Notes placeholder visible, Map UI completely removed from composition
-        composeTestRule.onNodeWithTag("notes_placeholder_screen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("notes_workspace_screen").assertIsDisplayed()
         composeTestRule.onNodeWithTag("notes_return_to_map_button").assertIsDisplayed()
         assertEquals(0, composeTestRule.onAllNodesWithTag("bottom_nav_bar").fetchSemanticsNodes().size)
 
@@ -1408,7 +1410,7 @@ class MapActivationSeamTest {
         composeTestRule.onNodeWithText("Simulated disk write failure", substring = true).assertIsDisplayed()
         assertEquals(MapActivationState.Active, coordinator.state.value)
         assertFalse(vm.isCleared)
-        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_placeholder_screen").fetchSemanticsNodes().size)
+        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_workspace_screen").fetchSemanticsNodes().size)
 
         // Clear disk fault and tap Retry in error dialog -> succeeds cleanly
         dataStore.failUpdatesPersistentlyWith = null
@@ -1418,7 +1420,7 @@ class MapActivationSeamTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag("notes_placeholder_screen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("notes_workspace_screen").assertIsDisplayed()
         assertTrue(vm.isCleared)
         val persisted = runBlocking {
             AppPreferencesRepository(context, dataStore).userPreferencesFlow.first().cameraState
@@ -1689,9 +1691,9 @@ class MapActivationSeamTest {
         // Open Notes remains fully usable while Map activation is failing
         composeTestRule.onNodeWithTag("map_activation_open_notes_button").performClick()
         composeTestRule.waitUntil(3_000L) {
-            composeTestRule.onAllNodesWithTag("notes_placeholder_screen").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithTag("notes_workspace_screen").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithTag("notes_placeholder_screen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("notes_workspace_screen").assertIsDisplayed()
         assertEquals(MapActivationState.Inactive, coordinator.state.value)
 
         // Return to Map (still failing) -> Recovery UI again -> clear error -> tap Retry

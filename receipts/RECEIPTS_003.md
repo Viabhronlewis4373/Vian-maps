@@ -75,3 +75,37 @@
   - On-device verification: Not tested on physical Android hardware or streaming emulator in this container.
 * **Deviations from request**: Workspace `.git` directory is absent in this AI Studio container (`ls -la .git` returned `No such file or directory`), so Git branch/commit comparison against `3efdcb9fb414c2b0b9fd4e5561a4f82c38f17220` could not be performed via Git CLI.
 * **Known issues / follow-up**: Physical Android hardware verification of live `MapView` teardown/recreation across `Map <-> Notes` and Activity destruction remains outstanding before final Phase AB-1 sign-off. Do not begin Notes implementation.
+
+---
+
+### Entry 2026-11-25T14:19:00-08:00 — Phase Notes-1: Complete Notes Stage 1 Implementation & Internet Toggle Snackbar Fix
+* **Summary**: Fix `MapViewModel.toggleInternet()` snackbar state bug, upgrade Room `map_app_master.db` v3->v4 with normalized `notes` and `note_checklist_items`, and build standalone ColorNote-inspired Notes Stage 1 UI inside `AppHostShell` while preserving Phase AB-1 Map isolation and Memory Palace.
+* **Exact files touched**:
+  - `app/src/main/java/com/example/ui/screens/MapViewModel.kt` (changed `toggleInternet(): Boolean` to return the resulting internet boolean)
+  - `app/src/main/java/com/example/ui/screens/MainMapScreen.kt` (updated `onToggleInternet` snackbar message to consume returned boolean)
+  - `app/src/main/java/com/example/data/db/AppDatabaseContract.kt` (`CURRENT_VERSION = 4` + v4 table documentation)
+  - `app/src/main/java/com/example/data/db/NotesEntities.kt` (created `NoteEntity`, `NoteChecklistItemEntity` with cascade FK + indices, `NoteWithChecklistItems`, `NotesDao`)
+  - `app/src/main/java/com/example/data/db/AppDatabase.kt` (registered entities, `notesDao()`, `MIGRATION_3_4`, `.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)`)
+  - `app/src/main/java/com/example/data/notes/NotePalette.kt` (created unified 9-color `NoteColor` palette with `YELLOW` default and contrast-safe header/paper tokens)
+  - `app/src/main/java/com/example/data/notes/NotesModels.kt` (created `NoteType`, `NoteSortOrder`, `NoteChecklistItem`, `NoteRecord`, `NoteFormatting`)
+  - `app/src/main/java/com/example/data/notes/NotesRepository.kt` (created local-first repository with atomic checklist ops, soft-delete, and Undo restore)
+  - `app/src/main/java/com/example/ui/notes/NotesViewModel.kt` (created standalone `AndroidViewModel` with `saveMutex`-serialized autosave/discard, 100-step Undo/Redo, sort/search, multi-select, checklist dialog state, and `NotesShareHelper`)
+  - `app/src/main/java/com/example/ui/notes/NotesUiComponents.kt` (created `NotesFiveSlotBottomBar`, `NoteAddChooserDialog`, `NoteColorPickerDialog`, `NotesStage2PlaceholderContent`)
+  - `app/src/main/java/com/example/ui/notes/NotesListContent.kt` (created ColorNote flat pastel rows with `7.dp` strip and `NotesMultiSelectBottomBar`)
+  - `app/src/main/java/com/example/ui/notes/NoteViewerEditorScreen.kt` (created View-first/Edit-first viewer/editor with Compose ruled paper `drawBehind`, `BasicTextField`, `ChecklistItemDialog`, interactive View checkboxes, overflow Share/Delete/Discard)
+  - `app/src/main/java/com/example/ui/notes/NotesHostScreen.kt` (created standalone Notes root host screen with `Return to Map`, Search, Sort, `BackHandler`, and Undo snackbar)
+  - `app/src/main/java/com/example/host/AppHostShell.kt` (wired `NotesHostScreen` in `AppHostDestination.NOTES`, removed `NotesPlaceholderScreen`)
+  - `app/src/main/res/values/strings.xml` (added Stage 1 Notes string resources)
+  - `app/src/test/java/com/example/ExampleUnitTest.kt` (added `MIGRATION_3_4` to `test43`/`test58` builders + `test66_verifyToggleInternetReturnsResultingStateForAccurateSnackbar`)
+  - `app/src/test/java/com/example/MapActivationSeamTest.kt` (updated v4 migration & `notes_workspace_screen` assertions)
+  - `app/src/test/java/com/example/NotesStage1Test.kt` (added 15 tests `notes_01`–`notes_15` covering migration, CRUD, View/Edit, fallbacks, 9 colors, 4 sorts, search, checklist dialog, Undo/Redo, multi-select, Share, autosave/discard, and AB-1/Stage-2 isolation)
+  - `BLUEPRINT.md`, `receipts/RECEIPTS_003.md`
+* **What was actually done**:
+  - Delivered full Stage 1 Notes persistence (Room v4 non-destructive `MIGRATION_3_4`), ColorNote-inspired flat list + 9-color system, View-first/Edit-first ruled-paper editor with serialized autosave, in-memory Undo/Redo, `NEXT/CANCEL/OK` checklist dialog, long-press multi-select color/soft-delete with Undo snackbar, and native `Intent.ACTION_SEND` Share chooser, strictly separated from Map runtime and Memory Palace; kept Habits/Expense/Calendar as honest planned placeholders and omitted all deferred Stage 1 exclusions.
+* **How it was verified**:
+  - Local JVM/Robolectric unit tests (`JAVA_TOOL_OPTIONS="-Drobolectric.offline=true -Drobolectric.dependency.dir=/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7" gradle :app:testDebugUnitTest --console=plain`): **123/123 passed** (`TEST-com.example.ExampleUnitTest.xml`: `tests="66" skipped="0" failures="0" errors="0"`, `TEST-com.example.MapActivationSeamTest.xml`: `tests="34" skipped="0" failures="0" errors="0"`, `TEST-com.example.PoiCategoryHighlightTest.xml`: `tests="8" skipped="0" failures="0" errors="0"`, `TEST-com.example.NotesStage1Test.xml`: `tests="15" skipped="0" failures="0" errors="0"`).
+  - Container applet compilation (`compile_applet`): `Build succeeded - the applet is compiled`.
+  - On-device verification: Not tested on physical Android hardware or streaming emulator in this container (no emulator/ADB available).
+* **Deviations from request**: None in functional scope; workspace `.git` directory is absent in this AI Studio container, preventing Git CLI commit/diff verification.
+* **Known issues / follow-up**: Manual on-device QA required for ruled-paper scrolling/IME keyboard ergonomics, native `Intent.ACTION_SEND` chooser launch, and physical `Map <-> Notes` surface transitions; deferred features (Archive/Trash UI, tags, attachments, fold sections, code blocks, file import, global search, type filters, grid toggle, checklist drag-reorder, reminders, locks, Habits/Expense/Calendar) remain for later stages.
+

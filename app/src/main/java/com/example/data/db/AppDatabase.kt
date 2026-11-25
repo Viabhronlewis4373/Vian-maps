@@ -617,7 +617,9 @@ interface SavedAreaDao {
         UserPlaceEntity::class,
         SavedRouteEntity::class,
         RouteWaypointEntity::class,
-        SavedAreaEntity::class
+        SavedAreaEntity::class,
+        NoteEntity::class,
+        NoteChecklistItemEntity::class
     ],
     version = AppDatabaseContract.CURRENT_VERSION,
     exportSchema = false
@@ -632,6 +634,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userPlaceDao(): UserPlaceDao
     abstract fun savedRouteDao(): SavedRouteDao
     abstract fun savedAreaDao(): SavedAreaDao
+    abstract fun notesDao(): NotesDao
 
     companion object {
         @Volatile
@@ -739,6 +742,59 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `notes` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `body` TEXT NOT NULL,
+                        `noteType` TEXT NOT NULL,
+                        `colorKey` TEXT NOT NULL,
+                        `isArchived` INTEGER NOT NULL,
+                        `isDeleted` INTEGER NOT NULL,
+                        `deletedAt` INTEGER,
+                        `createdAt` INTEGER NOT NULL,
+                        `modifiedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_isDeleted_isArchived_modifiedAt` ON `notes` (`isDeleted`, `isArchived`, `modifiedAt`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_createdAt` ON `notes` (`createdAt`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_notes_colorKey` ON `notes` (`colorKey`)"
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `note_checklist_items` (
+                        `id` TEXT NOT NULL,
+                        `noteId` TEXT NOT NULL,
+                        `text` TEXT NOT NULL,
+                        `isChecked` INTEGER NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`noteId`) REFERENCES `notes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_note_checklist_items_noteId` ON `note_checklist_items` (`noteId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_note_checklist_items_noteId_sortOrder` ON `note_checklist_items` (`noteId`, `sortOrder`)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -746,7 +802,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     AppDatabaseContract.DATABASE_NAME
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration(false)
                     .build().also { instance = it }
             }

@@ -1670,9 +1670,9 @@ class ExampleUnitTest {
         )
         sqliteDb.close()
 
-        // 2. Open with Room + MIGRATION_1_2 + MIGRATION_2_3 (v1 -> v3 schema validation runs automatically)
+        // 2. Open with Room + MIGRATION_1_2 + MIGRATION_2_3 + MIGRATION_3_4 (v1 -> v4 schema validation runs automatically)
         val migratedDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
 
@@ -2334,7 +2334,7 @@ class ExampleUnitTest {
         sqliteV2.close()
 
         val migratedV3 = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
 
@@ -2971,5 +2971,30 @@ class ExampleUnitTest {
         assertEquals("Göreme", reopenedOffline.wikiInfo?.title)
 
         db.savedAreaDao().clearAllSavedAreas()
+    }
+
+    @Test
+    fun test66_verifyToggleInternetReturnsResultingStateForAccurateSnackbar() = runBlocking {
+        val deps = com.example.map.activation.MapRuntimeDependencies(context)
+        val vm = com.example.ui.screens.MapViewModel(
+            application = ApplicationProvider.getApplicationContext(),
+            dependencies = deps
+        )
+        val initial = vm.uiState.value.isInternetEnabled
+        val afterFirst = vm.toggleInternet()
+        assertEquals(!initial, afterFirst)
+        assertEquals(afterFirst, vm.uiState.value.isInternetEnabled)
+        assertEquals(
+            if (afterFirst) "In-App Internet ON" else "In-App Internet OFF (Blocked)",
+            com.example.ui.screens.formatInternetToggleMessage(afterFirst)
+        )
+
+        val afterSecond = vm.toggleInternet()
+        assertEquals(initial, afterSecond)
+        assertEquals(afterSecond, vm.uiState.value.isInternetEnabled)
+        assertEquals(
+            if (afterSecond) "In-App Internet ON" else "In-App Internet OFF (Blocked)",
+            com.example.ui.screens.formatInternetToggleMessage(afterSecond)
+        )
     }
 }

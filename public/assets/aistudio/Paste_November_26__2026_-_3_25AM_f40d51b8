@@ -1,0 +1,755 @@
+# Vian Maps — Complete Notes Stage 1 Implementation
+
+You are implementing the Notes workspace in the existing **Vian Maps Android application**. This is a native Android implementation using the current project's architecture and Jetpack Compose. The supplied PWA ZIP is a reference for appearance and interaction, not code to port.
+
+This is an implementation task, not another audit-only task. Work carefully, inspect before editing, implement in stages, test where possible, and report exactly what changed and what was verified.
+
+## 0. Non-negotiable working rules
+
+### Source of truth
+
+1. The **current Google AI Studio workspace is the authoritative implementation baseline**. It contains newer work than some older repository snapshots.
+2. Do not replace current workspace files with older GitHub or ZIP versions.
+3. Inspect the actual current workspace before editing. Identify the real paths, existing implementations, architecture, Room schema, navigation, lifecycle code, tests, blueprints, and receipts.
+4. If Git metadata is absent, state that limitation. Do not invent branch names, commits, diffs, or Git verification.
+5. The `remix-vian-helper.zip` contains two PWA implementations. Use it as a design and behavior reference only. Do not copy its web code into Android.
+6. Do not assume an earlier audit is a substitute for checking the current workspace. Verify the relevant current files before making changes.
+
+### Scope discipline
+
+- Implement only the scope specified in this prompt.
+- Preserve existing working features and behavior.
+- Do not perform unrelated refactors, redesigns, dependency upgrades, or architecture changes.
+- Do not create duplicate navigation, database, repository, or lifecycle systems if suitable existing implementations already exist.
+- Follow the existing project conventions.
+- If an unexpected architecture or migration issue makes the agreed implementation unsafe, stop at that boundary, explain the issue, and propose the smallest safe correction.
+- Do not silently omit requirements.
+- Do not claim a test or build passed unless it actually ran and passed.
+
+### Implementation sequence
+
+Work through the stages below in order. After each stage, check the relevant files and tests before moving forward. Keep a clear record of completed, failed, blocked, and unverified work.
+
+---
+
+# 1. Protect the existing Map lifecycle and host boundary
+
+This is the most important constraint.
+
+The project already has a working independent host boundary between Map and Notes, established in Phase AB-1. Notes must integrate into that boundary without weakening or bypassing it.
+
+### Existing behavior to preserve
+
+- `MainActivity.kt` resolves the initial `AppHostDestination` before activating the Map feature.
+- `AppHostShell.kt` switches between `AppHostDestination.MAP` and `AppHostDestination.NOTES`.
+- The Places/Placemarks bottom button has two distinct actions:
+  - Short tap: opens the existing Places popup.
+  - Long press: opens the standalone Notes workspace.
+- The Places popup's Memory Palace entry remains unchanged.
+- Memory Palace is a map-related spatial notes feature. It is not the new standalone Notes workspace.
+- Returning from Notes to Map must reactivate a fresh Map session correctly.
+- System Back behavior must remain correct.
+- Map runtime state may be reused where the existing architecture already supports it, but a stale Map session must not survive deactivation.
+
+### Preserve the complete AB-1 deactivation sequence
+
+When navigating from Map to Notes, preserve the existing ordered asynchronous teardown:
+
+1. Flush pending Map preferences and state using the existing deactivation preparation.
+2. Await the required flush completion.
+3. Clear the per-session ViewModelStore as currently designed.
+4. Unregister Map-specific network diagnostics.
+5. Release the MapEngineController.
+6. Dispose the MapView through the existing MapViewLifecycleCoordinator.
+7. Complete the destination switch to Notes only after the required teardown has completed.
+
+Do not bypass the existing `MapActivationSeam`, `MapViewModel`, or `MapViewLifecycleCoordinator`.
+
+Preserve:
+
+- Activation recovery and loading screens.
+- Lifecycle diagnostics, including `DESTROYING`, `DESTROYED`, and `DESTROY_FAILED`.
+- The deterministic cancellation proof and its test support.
+- Existing activation and deactivation error handling.
+- Existing Map session isolation.
+
+### Strictly prohibited
+
+Do not:
+
+- Move Notes into the Map screen or Map navigation stack.
+- Make Notes depend on a live MapView.
+- Keep the Map feature active underneath Notes.
+- Change the Places button's short-tap behavior.
+- Change or merge Memory Palace with standalone Notes.
+- Remove lifecycle diagnostics or tests.
+- Weaken teardown ordering to make navigation appear faster.
+
+Before editing, identify the actual current implementations and record the relevant files. After integration, run the existing Map lifecycle regression tests.
+
+---
+
+# 2. Stage 0 — Baseline inspection and protection
+
+Before modifying code:
+
+1. Inspect the current workspace and identify:
+   - Host navigation and destination handling.
+   - Map activation/deactivation implementation.
+   - Places button tap and long-press wiring.
+   - Memory Palace popup implementation.
+   - Room database contract and migrations.
+   - Existing repositories, ViewModels, Compose components, and navigation patterns.
+   - Internet toggle implementation.
+   - Existing tests and documentation.
+2. Confirm the current Room database version and exact existing table schema.
+3. Confirm the current Notes placeholder and how it is reached.
+4. Inspect the PWA reference files relevant to:
+   - Notes list rows.
+   - Note editor.
+   - Checklist editor.
+   - Color palette.
+   - Sorting and search.
+   - Single-note Share.
+   - Multi-select actions.
+   - Bottom navigation and add picker.
+5. Record a baseline list of files and behavior that must remain unchanged.
+6. Check whether any Notes implementation already exists. Extend it if appropriate; do not create a duplicate.
+
+The PWA audit found that the legacy implementation is the stronger reference for consistent colors, readable note rows, and working Share behavior. The React implementation has some newer features but also has palette inconsistencies and dead controls. Do not reproduce those defects.
+
+Do not modify files during this stage.
+
+---
+
+# 3. Stage 1 — Fix the Internet toggle snackbar state
+
+The existing Internet toggle has a possible stale-state issue:
+
+- `toggleInternet()` currently returns `Unit`.
+- The UI may use a captured `uiState` snapshot to decide what snackbar message to show.
+- This can produce a message that does not match the actual resulting state.
+
+Inspect the current implementation and make the smallest safe correction.
+
+Required behavior:
+
+- The snackbar must describe the actual state after the toggle.
+- Do not calculate the result from a potentially stale Compose state snapshot.
+- Prefer returning the resulting Boolean state from the toggle operation, or use an equivalent safe state-update pattern consistent with the current architecture.
+- Preserve existing Internet toggle functionality and UI.
+- Do not refactor unrelated state handling.
+
+Add or update a test that verifies the resulting state and corresponding message behavior.
+
+---
+
+# 4. Stage 2 — Room database v3 to v4 migration
+
+The current database is expected to be `map_app_master.db`, currently version 3. Verify this against the actual workspace before changing anything.
+
+Notes and checklist items must use the existing Room database, with a **normalized relational design**.
+
+### Database requirements
+
+- Bump the database version from 3 to 4.
+- Add an explicit, non-destructive `MIGRATION_3_4`.
+- Do not modify the existing `MIGRATION_1_2` or `MIGRATION_2_3`.
+- Do not enable destructive migration.
+- Preserve all existing Map tables and data.
+- Register the new migration in the existing Room database builder.
+- Follow the current naming and schema conventions where possible.
+
+### Notes table
+
+Create a Notes entity/table with fields equivalent to:
+
+- `id`: stable primary key.
+- `title`: editable title.
+- `body`: text-note content.
+- `noteType`: text note or checklist.
+- `colorKey`: one of the nine supported palette keys.
+- `isArchived`: reserved for future Archive functionality.
+- `isDeleted`: soft-delete state.
+- `deletedAt`: nullable deletion timestamp.
+- `createdAt`: creation timestamp.
+- `modifiedAt`: last modification timestamp.
+
+Adapt names and types to existing project conventions, but preserve the required semantics.
+
+### Checklist items table
+
+Create a separate normalized checklist-items table.
+
+Each item must have:
+
+- Stable item ID.
+- Parent note ID.
+- Text.
+- Checked/completed state.
+- Explicit ordering field, such as `sortOrder`.
+- Appropriate timestamps only if they are useful and consistent with the existing data model.
+
+Use a foreign key to the parent Notes table with cascade deletion.
+
+Add appropriate indices for parent note lookup and ordering.
+
+Do not store the checklist as a JSON blob in the Notes entity. Checklist items must be independently persisted and updated.
+
+### Repository and DAO behavior
+
+Provide the required operations:
+
+- Observe active, non-deleted, non-archived notes.
+- Get a note by ID.
+- Insert and update a note.
+- Insert, update, reorder, and delete checklist items.
+- Update a checklist item's checked state.
+- Soft-delete a note.
+- Update note color.
+- Update modification timestamps consistently.
+
+Use transactions where parent-note and checklist-item changes must be atomic.
+
+### Delete semantics
+
+Stage 1 uses **soft-delete**:
+
+- Deleting a note sets `isDeleted = true` and `deletedAt`.
+- Deleted notes disappear from the active Notes list and normal search.
+- Provide an Undo action through a snackbar so an accidental deletion can restore the note.
+- Do not implement a Trash screen or Trash navigation in Stage 1.
+- Keep the schema ready for a future Trash feature.
+- Do not permanently delete user content merely because the Trash UI is deferred.
+
+Archive UI and behavior are also deferred. Keep the reserved archive field only if it is straightforward and safe to include in the migration.
+
+### Migration verification
+
+Add a migration test that:
+
+1. Creates a database with the actual v3 schema.
+2. Inserts representative data into every existing v3 Map table.
+3. Runs migration 3→4.
+4. Verifies all existing Map data remains intact.
+5. Verifies the Notes and checklist tables exist.
+6. Verifies indices and foreign-key behavior.
+7. Verifies the migrated schema matches the Room entity schema.
+
+Do not claim migration safety without running the test.
+
+---
+
+# 5. Stage 3 — Build the standalone Notes workspace
+
+Replace the existing Notes placeholder with the real Notes workspace.
+
+It must remain a separate host destination, not a Map overlay.
+
+### Navigation
+
+Preserve the agreed five-slot bottom navigation:
+
+**Notes | Habits | + | Expense | Calendar**
+
+- Notes is the functional Stage 1 destination.
+- Habits, Expense, and Calendar remain honest placeholders for later phases.
+- Do not show fake data or non-functional controls in those placeholders.
+- The central + button opens the add chooser.
+- Do not attach an Archive action to long-pressing +.
+- Do not introduce hidden gestures for important functionality.
+
+### Top app bar
+
+Use one clean native Material 3 Compose top bar consistent with the existing Vian Maps app.
+
+Include:
+
+- Notes title.
+- Return to Map action.
+- Search.
+- Sort.
+- Overflow menu.
+
+Do not reproduce the legacy PWA's two separate top bars or duplicate drawer/settings navigation.
+
+### Return to Map
+
+- Return to Map must navigate through the existing host destination mechanism.
+- System Back must behave correctly.
+- Do not directly activate Map components from the Notes screen.
+- The existing host lifecycle coordinator remains responsible for Map activation.
+
+### Add chooser
+
+Tapping the central + opens a clean Material 3 chooser with:
+
+- Text Note.
+- Checklist.
+
+Selecting either creates a note and opens it directly in Edit mode.
+
+Do not include file import in Stage 1.
+
+---
+
+# 6. Stage 4 — Notes list UI: Legacy ColorNote reference
+
+Use the legacy PWA's unified nine-color system as the visual reference.
+
+Do not reproduce the React PWA's inconsistent seven-color list palette and nine-color editor palette.
+
+### List layout
+
+Use:
+
+- Full-width, vertically stacked, flat note rows.
+- No rounded floating cards.
+- No large outer margins between cards.
+- Thin horizontal separators.
+- A saturated vertical color strip at the left edge.
+- Soft pastel row background.
+- Bold title on the left.
+- Modified date aligned on the right.
+- Optional subtle checklist indicator.
+- No body preview.
+- No tag chips in Stage 1.
+
+Approximate native Android sizing:
+
+- Row height: around 64–76dp, allowing growth for a two-line title.
+- Left color strip: around 6–8dp.
+- Title: around 16–17sp, semibold or bold.
+- Date: around 12sp.
+- Title: maximum two lines with ellipsis.
+
+Keep the design readable and native. Do not blindly reproduce browser pixel dimensions.
+
+### Untitled note display title
+
+A blank title must never create an empty list row.
+
+Use the following effective display title:
+
+- Text note: explicit title; otherwise first non-empty body line, trimmed; otherwise creation date in `yyyy-MM-dd` format.
+- Checklist: explicit title; otherwise first checklist item text; otherwise creation date in `yyyy-MM-dd` format.
+
+This is a display fallback. Do not silently write the fallback into the user's editable title field.
+
+Use the effective display title for alphabetical sorting.
+
+### Unified nine-color palette
+
+Use exactly these nine color identities and maintain consistent mapping across list, editor, color picker, database, sorting, and multi-select.
+
+| Color key | List background | Saturated strip |
+|---|---|---|
+| White | `#F5F5F0` | `#AAAAAA` |
+| Red | `#FCE8E8` | `#E53935` |
+| Orange | `#FEF3E2` | `#EF6C00` |
+| Yellow | `#FFFDE7` | `#F9A825` |
+| Green | `#E8F5E9` | `#2E7D32` |
+| Blue | `#E3F2FD` | `#1565C0` |
+| Purple | `#F3E5F5` | `#6A1B9A` |
+| Black | `#ECEFF1` | `#37474F` |
+| Gray | `#F5F5F5` | `#78909C` |
+
+New notes default to **Yellow**.
+
+The editor must use a soft paper tint based on the selected note color, not a harsh neon background.
+
+The header uses the corresponding saturated color and contrast-safe foreground text. Ensure text and icons remain legible for all nine colors, especially Black, Gray, White, Yellow, and Orange.
+
+Do not rely on an incomplete palette lookup that can cause Black or Gray notes to fall back to White.
+
+### Sorting
+
+Support these four options:
+
+1. Modified — default.
+2. Created.
+3. Alphabetical — case-insensitive, using effective display title.
+4. Color — fixed palette order, not alphabetical color names.
+
+Ensure sorting is deterministic and stable when values are equal.
+
+### Search
+
+Implement fast local Notes search.
+
+Search across:
+
+- Note title.
+- Text-note body.
+- Checklist item text.
+
+Requirements:
+
+- Search only active, non-deleted, non-archived notes.
+- Search results must update as the query changes.
+- Clear search returns to the normal list.
+- Handle blank and whitespace-only queries safely.
+- Do not introduce cross-module global search or scope chips.
+- Do not add a Notes/Checklist type filter in Stage 1.
+
+---
+
+# 7. Stage 5 — Note editor and interaction
+
+Use the ColorNote-style View-first model for existing notes.
+
+### Existing note opening
+
+Tapping an existing note opens it in **View mode**, not directly in Edit mode.
+
+View mode:
+
+- Displays the note title and content.
+- Shows a subtle `Viewing` status.
+- Shows the modified timestamp.
+- Text content is read-only.
+- Checklist checkboxes are interactive.
+- Checking or unchecking an item updates persistent state.
+- Checked checklist items display strikethrough.
+- Provide a clear Edit action.
+- Tapping the title or using the agreed body double-tap gesture may enter Edit mode, but do not make a gesture the only way to edit.
+
+### New note opening
+
+New Text Notes and new Checklists open directly in **Edit mode**.
+
+- Focus the appropriate input.
+- Use keyboard/IME handling that does not obscure the editor.
+- Ensure the user can immediately enter content.
+
+### Editor appearance
+
+Use:
+
+- Saturated, contrast-safe color header.
+- Back navigation.
+- Inline title field.
+- Color swatch button.
+- Overflow menu.
+- Subtle metadata/status row below the header.
+- Soft pastel paper body.
+- Native Compose text input.
+
+The color swatch opens a compact 3×3 color picker using the exact unified nine-color palette.
+
+### Ruled notebook paper
+
+Include faint horizontal notebook rules behind the text-note editing surface.
+
+Requirements:
+
+- Rules align with the text line height.
+- Use a line height around 28–32sp, adjusted to the actual text style.
+- Lines remain subtle and do not reduce readability.
+- Text scrolling and cursor placement must remain correct.
+- Do not implement this with a browser/WebView editor.
+
+Use native Compose drawing or another implementation compatible with the existing project.
+
+### Text editing and autosave
+
+- Use native Compose text input, such as BasicTextField where appropriate.
+- Support title and body editing.
+- Persist changes through the Notes repository.
+- Use debounced autosave.
+- Save reliably when leaving the editor or navigating away.
+- Avoid stale asynchronous writes overwriting newer edits.
+- Do not lose edits during quick navigation or repeated updates.
+- Keep modified timestamps correct.
+- Handle empty notes and unfinished new notes deliberately.
+- Provide explicit Discard behavior if a new unsaved note is abandoned.
+- Avoid creating duplicate notes during recomposition or repeated navigation.
+
+### Undo / Redo
+
+Include Undo and Redo in Stage 1.
+
+Use a proper in-memory snapshot history suitable for Compose, not browser `document.execCommand`.
+
+History must cover:
+
+- Title.
+- Text body.
+- Note color.
+- Checklist item text.
+- Checklist item order.
+- Checklist checked state.
+
+Requirements:
+
+- A title edit must be undoable.
+- Color changes must be undoable.
+- Checklist changes must be undoable.
+- Undo and Redo must not accidentally overwrite newer database state.
+- Save the resulting current state safely.
+- Disable Undo/Redo when no corresponding history exists.
+- Do not create a history entry for every meaningless recomposition.
+- Keep the implementation bounded to the current editing session unless the existing architecture already supports durable history.
+
+---
+
+# 8. Stage 6 — Checklist behavior
+
+Use the PWA's ColorNote-style dialog interaction.
+
+### Add item dialog
+
+Tapping Add Item opens a compact focused dialog containing:
+
+- Text input.
+- NEXT.
+- CANCEL.
+- OK.
+
+Behavior:
+
+**NEXT**
+- Save the current non-empty item.
+- Clear the input.
+- Keep the dialog open.
+- Allow rapid entry of another item.
+
+**CANCEL**
+- Discard only the unsaved text currently in the dialog.
+- Close the dialog.
+- Do not undo previously saved items.
+
+**OK**
+- Save the current non-empty item.
+- Close the dialog.
+
+Prevent accidental duplicate blank items.
+
+### View mode
+
+- Checklist items display as interactive checkboxes.
+- Checking/unchecking updates the database.
+- Checked items show strikethrough.
+- Toggling an item must not unexpectedly switch the note to Edit mode.
+
+### Edit mode
+
+- Show checklist structure.
+- Allow item text editing.
+- Provide an X/delete action for individual items.
+- Allow adding items through the specified dialog.
+- Persist item order.
+
+### Explicitly defer
+
+- Drag-and-drop checklist reordering.
+- Web Search item actions.
+- Attachment actions.
+- Fold sections.
+
+Do not implement these as disabled or fake buttons.
+
+---
+
+# 9. Stage 7 — Multi-select and real Share
+
+Both multi-select and real Share are included in Stage 1.
+
+### Multi-select
+
+Support entering selection mode through a clear, discoverable interaction, such as long-pressing a note row.
+
+Requirements:
+
+- Show selection state clearly.
+- Support selecting and deselecting multiple notes.
+- Provide a bulk action bar.
+- Include only these approved bulk actions:
+  - Change Color.
+  - Delete.
+- Color changes must use the same nine-color palette.
+- Bulk Delete uses soft-delete semantics and provides an Undo snackbar where safe.
+- Handle selection state correctly if a selected note disappears or is deleted.
+- Exiting selection mode clears selection.
+- Do not add dead Reminder, Lock, or generic More actions.
+- Do not add bulk Archive or Trash actions in Stage 1.
+- Do not add bulk Share unless it is already naturally supported without expanding the approved scope.
+
+### Single-note Share
+
+Implement real Android sharing using `Intent.ACTION_SEND` and the appropriate Android chooser.
+
+Share:
+
+- Note title.
+- Text-note body, or a readable checklist representation with checked/unchecked status.
+
+Requirements:
+
+- Use the actual current note content.
+- Do not show a fake Share button.
+- Handle missing or empty content safely.
+- Use Android's native sharing mechanism.
+- Keep the user in control of selecting the target app.
+- Include Share in the note overflow menu.
+- Do not add Lock or Reminder stubs.
+
+---
+
+# 10. Explicit Stage 1 exclusions
+
+Do not implement these features in this task:
+
+- Archive screen or Archive workflow.
+- Trash screen or Trash restoration UI.
+- Tags and tag management.
+- Attachments, images, drawings, or tables.
+- Fold sections.
+- Code-block editor.
+- File import.
+- Global cross-module search.
+- Notes/Checklist type filter.
+- Grid/List view toggle.
+- Checklist drag reordering.
+- Reminders.
+- Note locking.
+- Habits implementation.
+- Expense implementation.
+- Calendar implementation.
+- Global backup/export changes.
+- Theme settings redesign.
+- Any unrelated Map redesign or refactor.
+
+The database may reserve fields needed for future Archive/Trash functionality, but do not build the corresponding UI or claim those features are implemented.
+
+No dead-end controls: if an action is not implemented in Stage 1, do not display it as an apparently functional button.
+
+---
+
+# 11. Stage 8 — Testing and regression verification
+
+Add tests consistent with the project's existing test architecture.
+
+### Database and repository
+
+- v3→v4 migration.
+- Existing Map data preservation.
+- Notes insert/update/read.
+- Checklist item insert/update/delete.
+- Checklist item ordering.
+- Checked-state persistence.
+- Soft-delete and Undo restoration.
+- Archive/deleted notes excluded from active results.
+- Modification timestamps.
+- Foreign-key behavior.
+
+### Notes UI and ViewModel
+
+- Empty Notes state.
+- New text note opens in Edit mode.
+- New checklist opens in Edit mode.
+- Existing note opens in View mode.
+- View-mode checklist toggling.
+- Edit-mode title and body editing.
+- Untitled fallback titles.
+- All nine colors render and persist correctly.
+- Black and Gray do not fall back to White.
+- Four sorting modes.
+- Search across title, body, and checklist items.
+- Search excludes deleted/archived notes.
+- Add Item NEXT/CANCEL/OK behavior.
+- Undo/Redo, including title changes.
+- Multi-select entry, selection, deselection, color, and delete.
+- Share intent content.
+- Autosave and navigation write ordering.
+- Unsaved-note discard behavior.
+
+### Navigation and lifecycle regression
+
+- Places short tap still opens the existing Places popup.
+- Places long press opens standalone Notes.
+- Memory Palace remains in the Places popup.
+- Notes is independent of Map runtime.
+- Return to Map works.
+- System Back works.
+- Map teardown completes before Notes is displayed as required.
+- Returning to Map creates a valid fresh Map session.
+- Existing AB-1 diagnostics remain intact.
+- Existing Map lifecycle tests still pass.
+
+### Build verification
+
+Run the relevant unit tests, Room migration tests, and build tasks available in the current environment.
+
+If emulator/device tests cannot run, state that clearly. Do not present static inspection as runtime verification.
+
+---
+
+# 12. Documentation, blueprint, and receipts
+
+Inspect the existing documentation structure before editing it.
+
+Update the appropriate project blueprint and implementation receipts to record:
+
+- Notes Stage 1 scope.
+- Database v4 schema and migration.
+- Notes/Checklist persistence model.
+- Nine-color palette.
+- View-first and Edit-first behavior.
+- Search and sorting.
+- Checklist dialog behavior.
+- Undo/Redo.
+- Multi-select and Share.
+- Soft-delete and Undo behavior.
+- Deferred features.
+- Tests actually run and their results.
+- Build result.
+- Known limitations and remaining work.
+
+Do not overwrite historical receipts. Add a new appropriately numbered receipt using the project's existing numbering rules.
+
+Do not claim that a deferred feature is complete.
+
+---
+
+# 13. Security and generated files
+
+- Do not expose, copy, commit, or modify credentials or keystores.
+- Do not add debug keystores or encoded keystore material to source control.
+- Inspect `.gitignore` before generating build outputs.
+- Keep APKs, temporary build files, and generated artifacts out of source control unless the project explicitly requires them.
+- If a credential or keystore is unexpectedly exposed, stop and report it rather than continuing.
+
+---
+
+# 14. Final implementation report
+
+At completion, provide a concise but complete report with:
+
+1. **Baseline:** What workspace and architecture were inspected.
+2. **Files changed:** Exact paths and purpose.
+3. **Database:** Version, migration, tables, indices, and preservation verification.
+4. **Notes UI:** What was implemented.
+5. **Interactions:** View/Edit, checklist dialog, Undo/Redo, multi-select, Share, sorting, and search.
+6. **Lifecycle:** How AB-1 and Memory Palace separation were preserved.
+7. **Tests:** Exact commands or tasks run, pass/fail counts, and anything not run.
+8. **Build:** Actual build result.
+9. **Documentation:** Blueprint and receipt updates.
+10. **Deferred items:** Explicit list of features not implemented.
+11. **On-device QA:** Concrete steps to verify the app on a real Android device.
+
+For each requirement, distinguish between:
+- Implemented and verified.
+- Implemented but not runtime-verified.
+- Not implemented.
+- Blocked.
+
+Do not report success based solely on code being written.
+
+## Final instruction
+
+Implement the agreed scope carefully and completely, stage by stage.
+
+Preserve the current Google AI Studio workspace and the existing working Map implementation. Treat the PWA ZIP as a visual and interaction reference. Keep Notes independent from Map and Memory Palace. Use the normalized Room database design and explicit migration. Do not weaken lifecycle guarantees, introduce dead controls, or expand scope.
+
+Take the time required to inspect, implement, test, and verify properly. If a real blocker appears, stop at the affected boundary and explain it rather than guessing or silently changing the design.
