@@ -5,10 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
 import android.os.Looper
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -21,6 +30,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.db.AppDatabase
@@ -39,11 +50,14 @@ import com.example.map.activation.MapActivationState
 import com.example.map.activation.MapRuntimeDependencies
 import com.example.map.activation.MapRuntimeInitializer
 import com.example.ui.notes.NotesBottomTab
+import com.example.ui.notes.NotesFiveSlotBottomBar
 import com.example.ui.notes.NotesHostScreen
 import com.example.ui.notes.NotesShareHelper
 import com.example.ui.notes.NotesViewModel
+import com.example.ui.notes.computeConcaveCradleOffsetY
 import com.example.ui.notes.computeRuledLinePositions
 import com.example.ui.theme.MyApplicationTheme
+import kotlin.math.abs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -745,6 +759,12 @@ class NotesStage1Test {
         composeTestRule.onNodeWithTag("checklist_add_item_bottom_button").assertIsDisplayed()
         assertEquals(0, composeTestRule.onAllNodesWithText("No items yet").fetchSemanticsNodes().size)
 
+        // Verify modest ColorNote-style vertical gap (~56dp) instead of pinning bottom Add Item to screen bottom
+        val topAddBounds = composeTestRule.onNodeWithTag("checklist_add_item_button").getUnclippedBoundsInRoot()
+        val bottomAddBounds = composeTestRule.onNodeWithTag("checklist_add_item_bottom_button").getUnclippedBoundsInRoot()
+        val verticalGap = bottomAddBounds.top - topAddBounds.bottom
+        assertTrue("Expected modest gap (~56dp), got $verticalGap", verticalGap >= 40.dp && verticalGap <= 96.dp)
+
         // Top Add Item opens dialog with NEXT + CANCEL + OK
         composeTestRule.onNodeWithTag("checklist_add_item_button").performClick()
         composeTestRule.onNodeWithTag("checklist_item_dialog").assertIsDisplayed()
@@ -890,6 +910,119 @@ class NotesStage1Test {
                 "${color.displayName} rule line must remain softer than primary text",
                 color.editorRuleLineColor.alpha < 0.60f && color.editorRuleLineColor != color.editorPaperText
             )
+        }
+    }
+
+    @Test
+    fun notes_19_concaveBottomBarGeometryNavigationSmallScreenAndMultiSelect() {
+        // 1. Verify concave cradle curve math: flat shoulders, symmetric smooth valley, deep center nadir
+        val centerX = 500f
+        val halfSpan = 120f
+        val depth = 96f
+        assertEquals(0f, computeConcaveCradleOffsetY(0f, centerX, halfSpan, depth), 0.01f)
+        assertEquals(0f, computeConcaveCradleOffsetY(centerX - halfSpan, centerX, halfSpan, depth), 0.01f)
+        assertEquals(0f, computeConcaveCradleOffsetY(centerX + halfSpan, centerX, halfSpan, depth), 0.01f)
+        assertEquals(depth, computeConcaveCradleOffsetY(centerX, centerX, halfSpan, depth), 0.01f)
+        val leftQuarter = computeConcaveCradleOffsetY(centerX - 60f, centerX, halfSpan, depth)
+        val rightQuarter = computeConcaveCradleOffsetY(centerX + 60f, centerX, halfSpan, depth)
+        assertTrue(leftQuarter > 0f && leftQuarter < depth)
+        assertEquals(leftQuarter, rightQuarter, 0.05f)
+
+        // 2. Verify host screen navigation, raised +, selection semantics, and multi-select switch
+        runBlocking { repository.createNote(type = NoteType.TEXT, title = "Concave Test Note", body = "Body") }
+        val vm = createViewModel()
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                NotesHostScreen(onReturnToMap = {}, notesViewModel = vm)
+            }
+        }
+        composeTestRule.waitUntil(3_000L) {
+            composeTestRule.onAllNodesWithTag("notes_bottom_bar_surface").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        val barBounds = composeTestRule.onNodeWithTag("notes_bottom_bar_surface").getUnclippedBoundsInRoot()
+        val addBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_add").getUnclippedBoundsInRoot()
+        assertTrue("Center + button must rise above bottom bar shoulder", addBounds.top < barBounds.top)
+        assertTrue("Center + touch target must be >= 48dp", (addBounds.right - addBounds.left) >= 48.dp)
+        assertTrue("Center + touch target height must be >= 48dp", (addBounds.bottom - addBounds.top) >= 48.dp)
+        val barCenterX = (barBounds.left + barBounds.right) / 2f
+        val addCenterX = (addBounds.left + addBounds.right) / 2f
+        assertTrue("Center + must sit centered in cradle", abs((addCenterX - barCenterX).value) <= 2f)
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_notes").assertIsSelected()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_habits").assertIsNotSelected()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_expense").assertIsNotSelected()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_calendar").assertIsNotSelected()
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_habits").performClick()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_habits").assertIsSelected()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_notes").assertIsNotSelected()
+        composeTestRule.onNodeWithTag("notes_stage2_placeholder_habits").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_expense").performClick()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_expense").assertIsSelected()
+        composeTestRule.onNodeWithTag("notes_stage2_placeholder_expense").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_calendar").performClick()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_calendar").assertIsSelected()
+        composeTestRule.onNodeWithTag("notes_stage2_placeholder_calendar").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_notes").performClick()
+        composeTestRule.onNodeWithTag("notes_bottom_nav_notes").assertIsSelected()
+        composeTestRule.onNodeWithTag("notes_list").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("notes_bottom_nav_add").performClick()
+        composeTestRule.onNodeWithTag("notes_add_chooser_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.waitForIdle()
+
+        // Multi-select switches cleanly to bulk action bar
+        val firstId = vm.uiState.value.visibleNotes.first().id
+        composeTestRule.onNodeWithTag("note_row_$firstId").performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("notes_bulk_action_bar").assertIsDisplayed()
+        assertEquals(0, composeTestRule.onAllNodesWithTag("notes_bottom_bar_surface").fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun notes_20_concaveBottomBarNarrowWidthAndLargeFontNoOverlap() {
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                val baseDensity = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density = baseDensity.density, fontScale = 1.4f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .height(140.dp)
+                    ) {
+                        NotesFiveSlotBottomBar(
+                            activeTab = NotesBottomTab.NOTES,
+                            onSelectTab = {},
+                            onAddClick = {}
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        val notesBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_notes").getUnclippedBoundsInRoot()
+        val habitsBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_habits").getUnclippedBoundsInRoot()
+        val addBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_add").getUnclippedBoundsInRoot()
+        val expenseBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_expense").getUnclippedBoundsInRoot()
+        val calendarBounds = composeTestRule.onNodeWithTag("notes_bottom_nav_calendar").getUnclippedBoundsInRoot()
+        val surfaceBounds = composeTestRule.onNodeWithTag("notes_bottom_bar_surface").getUnclippedBoundsInRoot()
+
+        assertTrue(notesBounds.right <= habitsBounds.left)
+        assertTrue(habitsBounds.right <= addBounds.left)
+        assertTrue(addBounds.right <= expenseBounds.left)
+        assertTrue(expenseBounds.right <= calendarBounds.left)
+
+        listOf(notesBounds, habitsBounds, expenseBounds, calendarBounds).forEach { tab ->
+            assertTrue("Tab height must remain >= 48dp", (tab.bottom - tab.top) >= 48.dp)
+            assertTrue("Tab must remain vertically inside white bar", tab.top >= surfaceBounds.top && tab.bottom <= surfaceBounds.bottom)
         }
     }
 }

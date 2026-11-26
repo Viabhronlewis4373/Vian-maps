@@ -714,155 +714,153 @@ private fun ChecklistNoteBody(
     onDeleteItem: (String) -> Unit,
     onEnterEditMode: () -> Unit
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val availableHeight = maxHeight
-        val listState = rememberLazyListState()
-        LaunchedEffect(isEditing) {
-            if (isEditing && listState.firstVisibleItemIndex <= 1 && listState.firstVisibleItemScrollOffset == 0) {
-                listState.scrollToItem(0)
+    val listState = rememberLazyListState()
+    LaunchedEffect(isEditing) {
+        if (isEditing && listState.firstVisibleItemIndex <= 1 && listState.firstVisibleItemScrollOffset == 0) {
+            listState.scrollToItem(0)
+        }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(if (isEditing) "checklist_edit_list" else "checklist_view_list")
+    ) {
+        if (isEditing) {
+            item(key = "add_item_header") {
+                ChecklistAddItemRow(
+                    activeColor = activeColor,
+                    onClick = onOpenAddDialog,
+                    modifier = Modifier.testTag("checklist_add_item_button")
+                )
+                HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
             }
         }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag(if (isEditing) "checklist_edit_list" else "checklist_view_list")
-        ) {
-            if (isEditing) {
-                item(key = "add_item_header") {
-                    ChecklistAddItemRow(
-                        activeColor = activeColor,
-                        onClick = onOpenAddDialog,
-                        modifier = Modifier.testTag("checklist_add_item_button")
-                    )
-                    HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
-                }
-            }
 
-            if (items.isEmpty()) {
-                if (isEditing) {
-                    item(key = "edit_empty_space") {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height((availableHeight - 112.dp).coerceAtLeast(24.dp))
-                        )
-                    }
-                } else {
-                    item(key = "empty_checklist") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.notes_checklist_empty),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = activeColor.editorPaperMutedText
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            TextButton(
-                                onClick = onEnterEditMode,
-                                modifier = Modifier.heightIn(min = 48.dp)
-                            ) {
-                                Text(text = stringResource(id = R.string.notes_checklist_tap_to_edit))
-                            }
-                        }
-                    }
+        if (items.isEmpty()) {
+            if (isEditing) {
+                item(key = "edit_empty_space") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .testTag("checklist_empty_gap")
+                    )
                 }
             } else {
-                items(
-                    items = items.sortedBy { it.sortOrder },
-                    key = { it.id }
-                ) { item ->
-                    if (isEditing) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 54.dp)
-                                .clickable { onOpenEditDialog(item) }
-                                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
-                                .testTag("checklist_edit_item_${item.id}"),
-                            verticalAlignment = Alignment.CenterVertically
+                item(key = "empty_checklist") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.notes_checklist_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = activeColor.editorPaperMutedText
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        TextButton(
+                            onClick = onEnterEditMode,
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
-                            Text(
-                                text = item.text,
-                                fontSize = 16.sp,
-                                color = if (item.isChecked) {
-                                    activeColor.editorPaperMutedText
-                                } else {
-                                    activeColor.editorPaperText
-                                },
-                                textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(vertical = 8.dp)
-                            )
-                            IconButton(
-                                onClick = { onDeleteItem(item.id) },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .testTag("checklist_delete_item_${item.id}")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = stringResource(id = R.string.notes_checklist_delete_item_cd),
-                                    tint = activeColor.editorPaperMutedText
-                                )
-                            }
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 52.dp)
-                                .clickable { onToggleItem(item.id) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                .testTag("checklist_view_item_${item.id}"),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = item.isChecked,
-                                onCheckedChange = { onToggleItem(item.id) },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = activeColor.saturatedStrip,
-                                    uncheckedColor = activeColor.editorPaperMutedText
-                                ),
-                                modifier = Modifier.testTag("checklist_checkbox_${item.id}")
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = item.text,
-                                fontSize = 16.sp,
-                                color = if (item.isChecked) {
-                                    activeColor.editorPaperMutedText
-                                } else {
-                                    activeColor.editorPaperText
-                                },
-                                textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
-                            )
+                            Text(text = stringResource(id = R.string.notes_checklist_tap_to_edit))
                         }
                     }
-                    HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
                 }
             }
-
-            if (isEditing) {
-                item(key = "add_item_footer") {
-                    if (items.isEmpty()) {
-                        HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
+        } else {
+            items(
+                items = items.sortedBy { it.sortOrder },
+                key = { it.id }
+            ) { item ->
+                if (isEditing) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 54.dp)
+                            .clickable { onOpenEditDialog(item) }
+                            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+                            .testTag("checklist_edit_item_${item.id}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = item.text,
+                            fontSize = 16.sp,
+                            color = if (item.isChecked) {
+                                activeColor.editorPaperMutedText
+                            } else {
+                                activeColor.editorPaperText
+                            },
+                            textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 8.dp)
+                        )
+                        IconButton(
+                            onClick = { onDeleteItem(item.id) },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("checklist_delete_item_${item.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(id = R.string.notes_checklist_delete_item_cd),
+                                tint = activeColor.editorPaperMutedText
+                            )
+                        }
                     }
-                    ChecklistAddItemRow(
-                        activeColor = activeColor,
-                        onClick = onOpenAddDialog,
-                        modifier = Modifier.testTag("checklist_add_item_bottom_button")
-                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                            .clickable { onToggleItem(item.id) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .testTag("checklist_view_item_${item.id}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = item.isChecked,
+                            onCheckedChange = { onToggleItem(item.id) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = activeColor.saturatedStrip,
+                                uncheckedColor = activeColor.editorPaperMutedText
+                            ),
+                            modifier = Modifier.testTag("checklist_checkbox_${item.id}")
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = item.text,
+                            fontSize = 16.sp,
+                            color = if (item.isChecked) {
+                                activeColor.editorPaperMutedText
+                            } else {
+                                activeColor.editorPaperText
+                            },
+                            textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
+                        )
+                    }
+                }
+                HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
+            }
+        }
+
+        if (isEditing) {
+            item(key = "add_item_footer") {
+                if (items.isEmpty()) {
                     HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
                 }
+                ChecklistAddItemRow(
+                    activeColor = activeColor,
+                    onClick = onOpenAddDialog,
+                    modifier = Modifier.testTag("checklist_add_item_bottom_button")
+                )
+                HorizontalDivider(thickness = 0.75.dp, color = activeColor.editorRuleLineColor)
             }
         }
     }

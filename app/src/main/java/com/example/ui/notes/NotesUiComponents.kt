@@ -18,31 +18,43 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,10 +62,120 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.notes.NoteColor
+import kotlin.math.abs
+
+internal val NotesTealAccent = Color(0xFF00897B)
+private val NotesBottomBarInactiveContent = Color(0xFF64748B)
+private val NotesBottomBarContourBorder = Color(0xFFE2E8F0)
+
+private val FAB_SIZE = 56.dp
+private val FAB_RAISED_OFFSET = 22.dp
+private val CRADLE_HALF_SPAN = 46.dp
+private val CRADLE_DEPTH = 38.dp
+private val BAR_CONTENT_HEIGHT = 62.dp
+private val CENTER_CRADLE_SPACER_WIDTH = 72.dp
 
 /**
- * Five-slot Notes workspace bottom bar:
- * Notes | Habits | + | Expense | Calendar
+ * Computes the vertical concave cradle dip (`0f` on the flat horizontal shoulders, up to
+ * `depthPx` at `centerXPx`) matching the cubic Bezier valley rendered by [buildConcaveCradleTopPath].
+ */
+internal fun computeConcaveCradleOffsetY(
+    xPx: Float,
+    centerXPx: Float,
+    halfSpanPx: Float,
+    depthPx: Float
+): Float {
+    if (halfSpanPx <= 0f || depthPx <= 0f) return 0f
+    val dx = abs(xPx - centerXPx)
+    if (dx >= halfSpanPx) return 0f
+    if (dx <= 1e-4f) return depthPx
+
+    val p0x = halfSpanPx
+    val p1x = halfSpanPx * 0.70f
+    val p2x = halfSpanPx * 0.60f
+
+    var low = 0f
+    var high = 1f
+    repeat(20) {
+        val t = (low + high) * 0.5f
+        val u = 1f - t
+        val bx = (u * u * u * p0x) +
+            (3f * u * u * t * p1x) +
+            (3f * u * t * t * p2x)
+        if (bx > dx) {
+            low = t
+        } else {
+            high = t
+        }
+    }
+    val t = (low + high) * 0.5f
+    val u = 1f - t
+    val normalizedY = (3f * u * t * t) + (t * t * t)
+    return (normalizedY * depthPx).coerceIn(0f, depthPx)
+}
+
+internal fun buildConcaveCradleTopPath(
+    width: Float,
+    halfSpanPx: Float,
+    depthPx: Float,
+    path: Path = Path()
+): Path {
+    path.reset()
+    val centerX = width * 0.5f
+    val clampedHalfSpan = halfSpanPx.coerceIn(0f, centerX)
+    val clampedDepth = depthPx.coerceAtLeast(0f)
+
+    path.moveTo(0f, 0f)
+    if (clampedHalfSpan <= 0f || clampedDepth <= 0f) {
+        path.lineTo(width, 0f)
+        return path
+    }
+
+    val leftShoulder = centerX - clampedHalfSpan
+    val rightShoulder = centerX + clampedHalfSpan
+    val leftC1x = centerX - clampedHalfSpan * 0.70f
+    val leftC2x = centerX - clampedHalfSpan * 0.60f
+    val rightC2x = centerX + clampedHalfSpan * 0.60f
+    val rightC1x = centerX + clampedHalfSpan * 0.70f
+
+    path.lineTo(leftShoulder, 0f)
+    path.cubicTo(
+        leftC1x, 0f,
+        leftC2x, clampedDepth,
+        centerX, clampedDepth
+    )
+    path.cubicTo(
+        rightC2x, clampedDepth,
+        rightC1x, 0f,
+        rightShoulder, 0f
+    )
+    path.lineTo(width, 0f)
+    return path
+}
+
+internal fun buildConcaveCradleOutlinePath(
+    width: Float,
+    height: Float,
+    halfSpanPx: Float,
+    depthPx: Float,
+    path: Path = Path()
+): Path {
+    val safeDepth = depthPx.coerceIn(0f, (height - 1f).coerceAtLeast(0f))
+    buildConcaveCradleTopPath(
+        width = width,
+        halfSpanPx = halfSpanPx,
+        depthPx = safeDepth,
+        path = path
+    )
+    path.lineTo(width, height)
+    path.lineTo(0f, height)
+    path.close()
+    return path
+}
+
+/**
+ * Five-slot ColorNote-inspired Notes workspace bottom bar:
+ * Left: Notes | Habits   Center: Raised Teal + inside concave cradle   Right: Expense | Calendar
  */
 @Composable
 fun NotesFiveSlotBottomBar(
@@ -62,80 +184,142 @@ fun NotesFiveSlotBottomBar(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        shadowElevation = 6.dp
+    val density = LocalDensity.current
+    val halfSpanPx = with(density) { CRADLE_HALF_SPAN.toPx() }
+    val depthPx = with(density) { CRADLE_DEPTH.toPx() }
+
+    val sculptedBarShape = remember(halfSpanPx, depthPx) {
+        GenericShape { size, _ ->
+            buildConcaveCradleOutlinePath(
+                width = size.width,
+                height = size.height,
+                halfSpanPx = halfSpanPx,
+                depthPx = depthPx,
+                path = this
+            )
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("notes_bottom_bar_container")
     ) {
-        Column {
-            HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = FAB_RAISED_OFFSET)
+                .align(Alignment.BottomCenter)
+                .testTag("notes_bottom_bar_surface"),
+            shape = sculptedBarShape,
+            color = Color.White,
+            tonalElevation = 0.dp,
+            shadowElevation = 8.dp
+        ) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                NotesBottomNavTabItem(
-                    label = stringResource(id = R.string.notes_tab_notes),
-                    icon = Icons.Outlined.Description,
-                    selected = activeTab == NotesBottomTab.NOTES,
-                    testTag = "notes_bottom_nav_notes",
-                    onClick = { onSelectTab(NotesBottomTab.NOTES) },
-                    modifier = Modifier.weight(1f)
-                )
-
-                NotesBottomNavTabItem(
-                    label = stringResource(id = R.string.notes_tab_habits),
-                    icon = Icons.Outlined.CheckCircle,
-                    selected = activeTab == NotesBottomTab.HABITS,
-                    testTag = "notes_bottom_nav_habits",
-                    onClick = { onSelectTab(NotesBottomTab.HABITS) },
-                    modifier = Modifier.weight(1f)
-                )
-
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        onClick = onAddClick,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shadowElevation = 4.dp,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("notes_bottom_nav_add")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = stringResource(id = R.string.notes_add_button_cd),
-                                modifier = Modifier.size(26.dp)
+                    .drawWithCache {
+                        val topContourPath = buildConcaveCradleTopPath(
+                            width = size.width,
+                            halfSpanPx = halfSpanPx,
+                            depthPx = depthPx.coerceIn(0f, (size.height - 1f).coerceAtLeast(0f))
+                        )
+                        val strokeStyle = Stroke(
+                            width = 1.5.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        onDrawWithContent {
+                            drawContent()
+                            drawPath(
+                                path = topContourPath,
+                                color = NotesBottomBarContourBorder,
+                                style = strokeStyle
                             )
                         }
                     }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .height(BAR_CONTENT_HEIGHT)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    NotesBottomNavTabItem(
+                        label = stringResource(id = R.string.notes_tab_notes),
+                        icon = if (activeTab == NotesBottomTab.NOTES) {
+                            Icons.Filled.Description
+                        } else {
+                            Icons.Outlined.Description
+                        },
+                        selected = activeTab == NotesBottomTab.NOTES,
+                        testTag = "notes_bottom_nav_notes",
+                        onClick = { onSelectTab(NotesBottomTab.NOTES) },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    NotesBottomNavTabItem(
+                        label = stringResource(id = R.string.notes_tab_habits),
+                        icon = if (activeTab == NotesBottomTab.HABITS) {
+                            Icons.Filled.CheckCircle
+                        } else {
+                            Icons.Outlined.CheckCircle
+                        },
+                        selected = activeTab == NotesBottomTab.HABITS,
+                        testTag = "notes_bottom_nav_habits",
+                        onClick = { onSelectTab(NotesBottomTab.HABITS) },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(CENTER_CRADLE_SPACER_WIDTH))
+
+                    NotesBottomNavTabItem(
+                        label = stringResource(id = R.string.notes_tab_expense),
+                        icon = if (activeTab == NotesBottomTab.EXPENSE) {
+                            Icons.Filled.AccountBalanceWallet
+                        } else {
+                            Icons.Outlined.AccountBalanceWallet
+                        },
+                        selected = activeTab == NotesBottomTab.EXPENSE,
+                        testTag = "notes_bottom_nav_expense",
+                        onClick = { onSelectTab(NotesBottomTab.EXPENSE) },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    NotesBottomNavTabItem(
+                        label = stringResource(id = R.string.notes_tab_calendar),
+                        icon = if (activeTab == NotesBottomTab.CALENDAR) {
+                            Icons.Filled.CalendarMonth
+                        } else {
+                            Icons.Outlined.CalendarMonth
+                        },
+                        selected = activeTab == NotesBottomTab.CALENDAR,
+                        testTag = "notes_bottom_nav_calendar",
+                        onClick = { onSelectTab(NotesBottomTab.CALENDAR) },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+            }
+        }
 
-                NotesBottomNavTabItem(
-                    label = stringResource(id = R.string.notes_tab_expense),
-                    icon = Icons.Outlined.AccountBalanceWallet,
-                    selected = activeTab == NotesBottomTab.EXPENSE,
-                    testTag = "notes_bottom_nav_expense",
-                    onClick = { onSelectTab(NotesBottomTab.EXPENSE) },
-                    modifier = Modifier.weight(1f)
-                )
-
-                NotesBottomNavTabItem(
-                    label = stringResource(id = R.string.notes_tab_calendar),
-                    icon = Icons.Outlined.CalendarMonth,
-                    selected = activeTab == NotesBottomTab.CALENDAR,
-                    testTag = "notes_bottom_nav_calendar",
-                    onClick = { onSelectTab(NotesBottomTab.CALENDAR) },
-                    modifier = Modifier.weight(1f)
+        Surface(
+            onClick = onAddClick,
+            shape = CircleShape,
+            color = NotesTealAccent,
+            contentColor = Color.White,
+            shadowElevation = 6.dp,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .size(FAB_SIZE)
+                .testTag("notes_bottom_nav_add")
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(id = R.string.notes_add_button_cd),
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
@@ -152,15 +336,16 @@ private fun NotesBottomNavTabItem(
     modifier: Modifier = Modifier
 ) {
     val contentColor = if (selected) {
-        MaterialTheme.colorScheme.primary
+        NotesTealAccent
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        NotesBottomBarInactiveContent
     }
 
     Column(
         modifier = modifier
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
+            .semantics { this.selected = selected }
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp, horizontal = 2.dp)
             .testTag(testTag),
@@ -179,7 +364,9 @@ private fun NotesBottomNavTabItem(
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             color = contentColor,
+            textAlign = TextAlign.Center,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
     }
