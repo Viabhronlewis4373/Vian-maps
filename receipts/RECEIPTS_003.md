@@ -109,3 +109,23 @@
 * **Deviations from request**: None in functional scope; workspace `.git` directory is absent in this AI Studio container, preventing Git CLI commit/diff verification.
 * **Known issues / follow-up**: Manual on-device QA required for ruled-paper scrolling/IME keyboard ergonomics, native `Intent.ACTION_SEND` chooser launch, and physical `Map <-> Notes` surface transitions; deferred features (Archive/Trash UI, tags, attachments, fold sections, code blocks, file import, global search, type filters, grid toggle, checklist drag-reorder, reminders, locks, Habits/Expense/Calendar) remain for later stages.
 
+---
+
+### Entry 2026-11-26T04:49:00-08:00 — Phase Notes-1.1: Notes Editor Ruled-Paper Alignment & Checklist Dual Add Item Corrections
+* **Summary**: Fix ruled-paper baseline positioning, rule line contrast across all 9 `NoteColor` palettes, and Edit-mode top+bottom scrollable Checklist Add Item rows without changing Room schema, persistence, Undo/Redo, or AB-1 boundaries.
+* **Exact files touched**:
+  - `app/src/main/java/com/example/data/notes/NotePalette.kt` (tuned `editorRuleLineColor` across all 9 `NoteColor` entries from `0x1C..0x24` to `0x3D..0x55` while preserving all palette identities, headers, strips, and paper backgrounds)
+  - `app/src/main/java/com/example/ui/notes/NoteViewerEditorScreen.kt` (added `computeRuledLinePositions`, `PlatformTextStyle(includeFontPadding = false)`, `LineHeightStyle.Alignment.Bottom`, `onTextLayout` baseline tracking on both Edit `BasicTextField` and View `Text`, `ChecklistAddItemRow` at top and scrollable bottom of `ChecklistNoteBody` in Edit mode with empty space between them and no empty-state text, and `LazyListState` index-0 snap on Edit entry from top of View mode)
+  - `app/src/test/java/com/example/NotesStage1Test.kt` (added `notes_16`–`notes_18` verifying dual Add Item controls when empty/scrolled/hidden in View mode, snug baseline rule positioning + wrapped/multi-paragraph View/Edit scroll, and 9-color rule differentiation)
+  - `BLUEPRINT.md`, `receipts/RECEIPTS_003.md`
+* **What was actually done**:
+  - Diagnosed faint/misaligned rules caused by low `11%–14%` rule alpha on pastel paper combined with default `LineHeightStyle.Alignment.Proportional` + unmeasured fixed `topPad + lineHeight` drawing that placed lines halfway between text rows. Synchronized `drawBehind` rules to measured `TextLayoutResult` visual baselines (`baseline + 3.5.sp.toPx()`) and continued empty-space rules at the measured line stride across both View and Edit modes.
+  - Extracted `ChecklistAddItemRow`, added `checklist_add_item_bottom_button` as a scrollable `LazyColumn` footer in Edit mode, replaced the Edit-mode `"No items yet"` empty-state text with open space keeping both Add Item rows visible on empty checklists, and kept View mode free of both editing rows.
+* **How it was verified**:
+  - Local JVM/Robolectric unit tests (`JAVA_TOOL_OPTIONS="-Drobolectric.offline=true -Drobolectric.dependency.dir=/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7" gradle :app:testDebugUnitTest --console=plain`): **126/126 passed** (`ExampleUnitTest`: 66/66, `MapActivationSeamTest`: 34/34, `PoiCategoryHighlightTest`: 8/8, `NotesStage1Test`: 18/18; `0` failures/errors/skipped).
+  - Container applet compilation (`compile_applet`): `Build succeeded - the applet is compiled`.
+  - On-device / visual verification: Not tested on physical Android hardware or streaming emulator in this container (no emulator/ADB available, and the two referenced screenshots were not present in the turn payload).
+* **Deviations from request**: None in code scope; visual inspection against the two reference screenshots on live emulator/device could not run inside the container environment.
+* **Known issues / follow-up**: Perform on-device / streaming-emulator visual inspection of ruled-paper text/rule snugness, IME keyboard open/close, multi-line wrapping, all 9 colors, and empty/long checklist Edit-mode Add Item rows against the reference screenshots.
+
+

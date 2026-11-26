@@ -33,7 +33,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFFCFCF8),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF525252),
-        editorRuleLineColor = Color(0x1C0F172A),
+        editorRuleLineColor = Color(0x3D64748B),
         editorHeaderDividerColor = Color(0x330F172A)
     ),
     RED(
@@ -47,7 +47,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFFFF5F5),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF5C3434),
-        editorRuleLineColor = Color(0x1EE53935),
+        editorRuleLineColor = Color(0x47E53935),
         editorHeaderDividerColor = Color(0x26FFFFFF)
     ),
     ORANGE(
@@ -61,7 +61,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFFFF8EE),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF5C3E1E),
-        editorRuleLineColor = Color(0x20EF6C00),
+        editorRuleLineColor = Color(0x4AEF6C00),
         editorHeaderDividerColor = Color(0x28000000)
     ),
     YELLOW(
@@ -75,7 +75,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFFFFEF3),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF5B4E1D),
-        editorRuleLineColor = Color(0x24C49000),
+        editorRuleLineColor = Color(0x55D49B00),
         editorHeaderDividerColor = Color(0x24000000)
     ),
     GREEN(
@@ -89,7 +89,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFF3FBF4),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF2D4F31),
-        editorRuleLineColor = Color(0x1E2E7D32),
+        editorRuleLineColor = Color(0x452E7D32),
         editorHeaderDividerColor = Color(0x26FFFFFF)
     ),
     BLUE(
@@ -103,7 +103,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFF2F8FF),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF2A4566),
-        editorRuleLineColor = Color(0x1E1565C0),
+        editorRuleLineColor = Color(0x451565C0),
         editorHeaderDividerColor = Color(0x26FFFFFF)
     ),
     PURPLE(
@@ -117,7 +117,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFFAF2FC),
         editorPaperText = Color(0xFF1A1A1A),
         editorPaperMutedText = Color(0xFF4E2D5E),
-        editorRuleLineColor = Color(0x1E6A1B9A),
+        editorRuleLineColor = Color(0x426A1B9A),
         editorHeaderDividerColor = Color(0x26FFFFFF)
     ),
     BLACK(
@@ -131,7 +131,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFECEFF1),
         editorPaperText = Color(0xFF111827),
         editorPaperMutedText = Color(0xFF455A64),
-        editorRuleLineColor = Color(0x2237474F),
+        editorRuleLineColor = Color(0x47263238),
         editorHeaderDividerColor = Color(0x2EFFFFFF)
     ),
     GRAY(
@@ -145,7 +145,7 @@ enum class NoteColor(
         editorPaperBackground = Color(0xFFF6F7F8),
         editorPaperText = Color(0xFF111827),
         editorPaperMutedText = Color(0xFF4B5563),
-        editorRuleLineColor = Color(0x1F455A64),
+        editorRuleLineColor = Color(0x45546E7A),
         editorHeaderDividerColor = Color(0x28000000)
     );
 

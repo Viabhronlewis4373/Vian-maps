@@ -12,12 +12,15 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.db.AppDatabase
@@ -39,6 +42,7 @@ import com.example.ui.notes.NotesBottomTab
 import com.example.ui.notes.NotesHostScreen
 import com.example.ui.notes.NotesShareHelper
 import com.example.ui.notes.NotesViewModel
+import com.example.ui.notes.computeRuledLinePositions
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -720,5 +724,172 @@ class NotesStage1Test {
         assertEquals(MapActivationState.Active, coordinator.state.value)
         assertEquals(1, sdkInitCalls.get())
         composeTestRule.onNodeWithText("Map Active UI").assertIsDisplayed()
+    }
+
+    @Test
+    fun notes_16_checklistDualAddItemControlsEmptyScrollableAndHiddenInViewMode() {
+        val vm = createViewModel()
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                NotesHostScreen(onReturnToMap = {}, notesViewModel = vm)
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Create empty checklist -> opens directly in Edit mode with BOTH Add Item rows and zero empty-state message
+        composeTestRule.onNodeWithTag("notes_bottom_nav_add").performClick()
+        composeTestRule.onNodeWithTag("notes_add_checklist").performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("checklist_add_item_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("checklist_add_item_bottom_button").assertIsDisplayed()
+        assertEquals(0, composeTestRule.onAllNodesWithText("No items yet").fetchSemanticsNodes().size)
+
+        // Top Add Item opens dialog with NEXT + CANCEL + OK
+        composeTestRule.onNodeWithTag("checklist_add_item_button").performClick()
+        composeTestRule.onNodeWithTag("checklist_item_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("checklist_item_dialog_input").performTextInput("Top Item")
+        composeTestRule.onNodeWithTag("checklist_item_dialog_next").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("checklist_item_dialog_input").performTextInput("Discarded Text")
+        composeTestRule.onNodeWithTag("checklist_item_dialog_cancel").performClick()
+        composeTestRule.waitForIdle()
+
+        // Bottom Add Item opens the exact same dialog and saves via OK
+        composeTestRule.onNodeWithTag("checklist_add_item_bottom_button").performClick()
+        composeTestRule.onNodeWithTag("checklist_item_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("checklist_item_dialog_input").performTextInput("Bottom Item")
+        composeTestRule.onNodeWithTag("checklist_item_dialog_ok").performClick()
+        composeTestRule.waitForIdle()
+
+        val checklistId = vm.uiState.value.editor!!.note.id
+        awaitCondition {
+            runBlocking { repository.getNoteById(checklistId)?.items?.size == 2 }
+        }
+        assertEquals(
+            listOf("Top Item", "Bottom Item"),
+            runBlocking { repository.getNoteById(checklistId)!!.items.map { it.text } }
+        )
+
+        // Switching to View mode hides both Add Item controls
+        composeTestRule.onNodeWithTag("note_editor_done_button").performClick()
+        composeTestRule.waitUntil(3_000L) {
+            vm.uiState.value.editor?.isEditing == false
+        }
+        assertEquals(0, composeTestRule.onAllNodesWithTag("checklist_add_item_button").fetchSemanticsNodes().size)
+        assertEquals(0, composeTestRule.onAllNodesWithTag("checklist_add_item_bottom_button").fetchSemanticsNodes().size)
+
+        // Add many items so bottom Add Item sits at the end of the scrollable list (not a fixed overlay)
+        runBlocking {
+            for (i in 3..25) {
+                repository.addChecklistItem(checklistId, "Scrollable Item $i")
+            }
+        }
+        awaitCondition {
+            vm.uiState.value.allActiveNotes.firstOrNull { it.id == checklistId }?.items?.size == 25
+        }
+        vm.openExistingNote(checklistId)
+        awaitCondition { vm.uiState.value.editor?.note?.items?.size == 25 }
+        vm.enterEditMode()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("checklist_add_item_button").assertIsDisplayed()
+        // Bottom Add Item is below the 25 items in the scrollable list (not pinned as an overlay)
+        assertTrue(
+            composeTestRule.onAllNodesWithTag("checklist_add_item_bottom_button").fetchSemanticsNodes().isEmpty()
+        )
+        composeTestRule.onNodeWithTag("checklist_edit_list").performScrollToIndex(26)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("checklist_add_item_bottom_button").assertIsDisplayed()
+    }
+
+    @Test
+    fun notes_17_ruledPaperPositioningWrappedParagraphsViewEditAndLongScroll() {
+        // 1. Verify exact snug baseline-to-rule positioning and empty-space continuation
+        val lineStepPx = 90f
+        val topOffsetPx = 30f
+        val snugDescentPx = 10.5f
+        // Simulated baselines for wrapped 2-line paragraph + blank newline + line 4
+        val baselines = listOf(78f, 168f, 258f, 348f)
+        val positions = computeRuledLinePositions(
+            lineBaselinesPx = baselines,
+            topOffsetPx = topOffsetPx,
+            fallbackStepPx = lineStepPx,
+            snugDescentPx = snugDescentPx,
+            totalHeightPx = 900f
+        )
+        assertTrue(positions.size >= 8)
+        baselines.forEachIndexed { idx, baseline ->
+            val expectedRuleY = topOffsetPx + baseline + snugDescentPx
+            assertEquals(expectedRuleY, positions[idx], 0.01f)
+            // Snug against baseline (~10.5px below baseline), NOT halfway (~45px below)
+            assertTrue((positions[idx] - (topOffsetPx + baseline)) < lineStepPx * 0.25f)
+        }
+        for (i in 1 until positions.size) {
+            assertEquals(lineStepPx, positions[i] - positions[i - 1], 0.01f)
+        }
+
+        // 2. Verify View and Edit modes render ruled paper surface with wrapped, multi-paragraph, scrollable note
+        val longBody = buildString {
+            append("Wrapped paragraph line that should wrap naturally across multiple visual lines on mobile widths without drifting away from its horizontal rules.\n\n\n")
+            for (i in 1..45) {
+                append("Notebook entry line $i\n")
+            }
+        }
+        val note = runBlocking {
+            repository.createNote(type = NoteType.TEXT, title = "Ruled Test", body = longBody)
+        }
+
+        val vm = createViewModel()
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                NotesHostScreen(onReturnToMap = {}, notesViewModel = vm)
+            }
+        }
+        composeTestRule.waitUntil(3_000L) {
+            composeTestRule.onAllNodesWithTag("note_row_${note.id}").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithTag("note_row_${note.id}").performClick()
+        composeTestRule.waitUntil(3_000L) {
+            composeTestRule.onAllNodesWithTag("note_viewer_body").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("note_paper_surface").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("note_paper_scroll_container").performTouchInput { swipeUp() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("note_paper_surface").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("note_editor_edit_button").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("note_paper_surface").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("note_editor_body_input").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("note_paper_scroll_container").performTouchInput { swipeUp() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("note_paper_surface").assertIsDisplayed()
+    }
+
+    @Test
+    fun notes_18_allNineNoteColorsHaveDistinctNonHardcodedRuleColors() {
+        val colors = NoteColor.orderedColors
+        assertEquals(9, colors.size)
+
+        // Each color has its own distinct rule line color (not one hardcoded yellow for all)
+        val distinctRuleColors = colors.map { it.editorRuleLineColor }.toSet()
+        assertEquals(9, distinctRuleColors.size)
+
+        colors.forEach { color ->
+            assertTrue(
+                "${color.displayName} rule line must have visible opacity",
+                color.editorRuleLineColor.alpha >= 0.20f
+            )
+            assertTrue(
+                "${color.displayName} rule line must remain distinct from paper background",
+                color.editorRuleLineColor != color.editorPaperBackground
+            )
+            assertTrue(
+                "${color.displayName} rule line must remain softer than primary text",
+                color.editorRuleLineColor.alpha < 0.60f && color.editorRuleLineColor != color.editorPaperText
+            )
+        }
     }
 }
